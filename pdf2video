@@ -122,18 +122,26 @@ function MakeVideo {
 )
 
     ffmpeg -y -i "${page_image_file}" -vf "scale=${video_width}:${video_height}:force_original_aspect_ratio=decrease,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2" "${resized_page_image_file}"
-    video_filter=""
     [ $verbose ] && echo "ffmpeg $?"
 
-    local time_play=$(mp3info -p "%S\n" "${page_mp3_file}")
+    local play_time=$(mp3info -p "%S\n" "${page_mp3_file}")
     local time_opt="-c:a copy"
-    if [ ${minimum_time_on_page} -ge $(( ${time_play} )) ]; then
-        local add_time="$minimum_time_on_page" # $(( 5 - ${time_play} ))
+    if [ ${minimum_time_on_page} -ge $(( ${play_time} )) ]; then
+        local add_time="$minimum_time_on_page" # $(( 5 - ${play_time} ))
         time_opt="-c:a mp3 -af adelay=${add_time}s:all=true" # 
         [ $verbose ] && echo "time_opt ${time_opt}"
     fi
 
-    ffmpeg -y ${ffmpeg_pre_options} -i "${resized_page_image_file}" -i "${page_mp3_file}" ${ffmpeg_options} ${time_opt} ${video_filter} "${page_mp4_file}"
+    float_image=''
+    video_filter=''
+    if [ $split = 'time' ]; then
+        float_image="-i \"${resized_page_image_file}\""
+        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2:${video_height}*2[scale1]; [0:v][scale1]overlay=enable='between=(t,0,${play_time})':x=-w/4:y=-t/(${play_time})*h/2[out]\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
+    fi
+
+    cmd="ffmpeg -y ${ffmpeg_pre_options} -i \"${resized_page_image_file}\" ${float_image} -i \"${page_mp3_file}\" ${video_filter} ${ffmpeg_options} ${time_opt} \"${page_mp4_file}\""
+    [ $verbose ] && echo "cmd $cmd"
+    eval "$cmd"
     [ $verbose ] && echo "ffmpeg $?"
 
     SAVE_IFS=$IFS
@@ -189,7 +197,7 @@ for ((page=1;page<=${page_count};page++)); do
     [ $verbose ] && echo "------------------------------------------------"
     [ $verbose ] && echo "Обрабатываем страницу №$page"
 
-    page_text_file=$(mktemp -t "pdf2video_page_text_file_${page}_XXXXXXXXXXX.mp3"
+    page_text_file=$(mktemp -t "pdf2video_page_text_file_${page}_XXXXXXXXXXX.txt"
 )
     page_image_file=$(mktemp -t "pdf2video_page_image_file_${page}_XXXXXXXXXXX.png"
 )
@@ -260,8 +268,8 @@ done
 
 SAVE_IFS=$IFS
 IFS=""
-[ $verbose ] && echo "Объединяем файлы ${video_file_names_array[*]} в $out_file"
-ffmpeg -y -f concat -safe 0 -i <(for ((i = 0; i < ${#video_file_names_array[@]}; i++)) do echo "file '$PWD/${video_file_names_array[$i]}'"; done) -acodec copy -vcodec copy "$out_file"
+[ $verbose ] && echo "Объединяем файлы ($PWD) ${video_file_names_array[*]} в $out_file"
+ffmpeg -y -f concat -safe 0 -i <( for ((i = 0; i < ${#video_file_names_array[@]}; i++)) do echo "file '$PWD/${video_file_names_array[$i]}'"; done ) -acodec copy -vcodec copy "$out_file"
 [ $verbose ] && echo "ffmpeg $?"
 
 for ((i = 0; i < ${#video_file_names_array[@]}; i++)) do
