@@ -137,6 +137,9 @@ function MakeVideo {
     if [ $split = 'time' ]; then
         float_image="-i \"${resized_page_image_file}\""
         video_filter="-filter_complex  \"[1:v]scale=${video_width}*2:${video_height}*2[scale1]; [0:v][scale1]overlay=enable='between=(t,0,${play_time})':x=-w/4:y=-t/(${play_time})*h/2[out]\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
+    elif [ $split = 'half' ]; then
+        float_image="-i \"${resized_page_image_file}\""
+        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale1]; [1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale2]; [0:v][scale1]overlay=enable='between=(t,0,${play_time}/2)':x=-w/(4*1.026):y=0[out]; [out][scale2]overlay=enable='between=(t,${play_time}/2,${play_time})':x=-w/(4*1.026):y=-h/(2*1.026)[out]\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
     fi
 
     cmd="ffmpeg -y ${ffmpeg_pre_options} -i \"${resized_page_image_file}\" ${float_image} -i \"${page_mp3_file}\" ${video_filter} ${ffmpeg_options} ${time_opt} \"${page_mp4_file}\""
@@ -150,28 +153,6 @@ function MakeVideo {
     IFS=$SAVE_IFS
 
     rm "${resized_page_image_file}"
-}
-
-function SplitText {
-    local out_array_name=$1[@]
-    local source_text=$2
-    local split_size=$3
-    out_array=("${!out_array_name}")
-
-    local space_char=" "
-    local cur_text=""
-    for ((i=1;i<=${#source_text};i++)); do
-        local cur_char=${source_text:$i-1:1}
-        cur_text="${cur_text}${cur_char}"
-        if [ "$cur_char" = "$space_char" ] && [ ${#cur_text} -ge $split_size ] || [ $i = ${#source_text} ]; then
-            SAVE_IFS=$IFS
-            IFS=""
-            split_source_text_array+=(${cur_text})
-            IFS=$SAVE_IFS
-
-            cur_text=""
-        fi
-    done
 }
 
 [ $verbose ] && echo "Всего страниц $page_count"
@@ -206,61 +187,15 @@ for ((page=1;page<=${page_count};page++)); do
 
     source_text="$(cat "${page_text_file}")"
 
-    if [ "$split" = "half" ] && [ ${#source_text} -ge $minimum_text_on_page ]; then
+    page_mp3_file=$(mktemp -t "pdf2video_page_mp3_file_XXXXXXXXXXX.mp3")
 
-        split_size=$(( ${#source_text} / 2 + 2)) # Половина с небольшим запасом
-        split_source_text_array=()
+    Text2mp3 "$page_text_file" "$page_mp3_file"
 
-        SplitText split_source_text_array "$source_text" $split_size
+    page_mp4_file="${input_file}_${page}.mp4"
 
-        page_mp3_file_half1=$(mktemp -t "pdf2video_page_mp3_file_half1_XXXXXXXXXXX.mp3"
-)
-        page_mp3_file_half2=$(mktemp -t "pdf2video_page_mp3_file_half2_XXXXXXXXXXX.mp3"
-)
+    MakeVideo "$page_image_file" "$page_mp3_file" "$page_mp4_file" "$split"
 
-        Text2mp3 <( echo "${split_source_text_array[0]}" ) "$page_mp3_file_half1"
-        Text2mp3 <( echo "${split_source_text_array[1]}" ) "$page_mp3_file_half2"
-
-        width=$(identify -format "%w" "$page_image_file")> /dev/null
-        height=$(identify -format "%h" "$page_image_file")> /dev/null
-
-        height_half=$(( $height / 2 + $height / 20 ))
-
-        page_image_file_half1=$(mktemp -t "pdf2video_page_image_file_half1_XXXXXXXXXXX.png"
-)
-        page_image_file_half2=$(mktemp -t "pdf2video_page_image_file_half2_XXXXXXXXXXX.png"
-)
-
-        # convert format (widthxheight+left+top / wxh+l+t)
-        convert "$page_image_file" -crop ${width}x${height_half}+0+0 "${page_image_file_half1}"
-        convert "$page_image_file" -crop "${width}x${height_half}+0+$(( $height - $height_half ))" "${page_image_file_half2}"
-
-        page_mp4_file_half1="${input_file}_${page}_half1.mp4"
-        page_mp4_file_half2="${input_file}_${page}_half2.mp4"
-
-        MakeVideo "${page_image_file_half1}" "$page_mp3_file_half1" "$page_mp4_file_half1" "$split"
-
-        MakeVideo "${page_image_file_half2}" "$page_mp3_file_half2" "$page_mp4_file_half2" "$split"
-
-        rm "$page_image_file_half1"
-        rm "$page_image_file_half2"
-
-        rm "$page_mp3_file_half1"
-        rm "$page_mp3_file_half2"
-
-    else
-        page_mp3_file=$(mktemp -t "pdf2video_page_mp3_file_XXXXXXXXXXX.mp3")
-
-        Text2mp3 "$page_text_file" "$page_mp3_file"
-
-        page_mp4_file="${input_file}_${page}.mp4"
-
-        MakeVideo "$page_image_file" "$page_mp3_file" "$page_mp4_file" "$split"
-
-        rm "$page_mp3_file"
-
-    fi
-
+    rm "$page_mp3_file"
     rm "$page_image_file"
     rm "$page_text_file"
 
