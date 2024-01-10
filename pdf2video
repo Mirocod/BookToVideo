@@ -25,13 +25,12 @@ sound_params=(
     "f|format|Выходной формат. Может быть либо 'mp3', либо 'wav'. По умолчанию '!DEFAULT!'.|:|'mp3'|"
     "q|quality|Качество выходного файла. Может быть либо 'hi', либо 'lo'. По умолчанию '!DEFAULT!'.|:|'hi'|"
     "l|lang|Язык озвучки. По умолчанию '!DEFAULT!'.|:|'ru_RU'|"
-#    "|||:||"
+    "a|start_text|Дополнительный текст перед началом озвучки. По умолчанию '!DEFAULT!'.|:|''|"
     )
 
 video_params=(
     "o|output|Выходной видео файл.|:|''|"
-    #"t|split|Деление страницы. Может быть либо 'half' (деление пополам), либо 'time' (плавное перемещение), либо 'no' (целиком). По умолчанию '!DEFAULT!'.|:|'half'|"
-    "t|split|Деление страницы. Может быть либо 'half' (деление пополам), либо 'no' (целиком). По умолчанию '!DEFAULT!'.|:|'half'|"
+    "t|split|Деление страницы. Может быть либо 'half' (деление пополам), либо 'time' (плавное перемещение), либо 'full' (целиком). По умолчанию '!DEFAULT!'.|:|'half'|"
     "W|video_width|Размер видео в пикселях по ширине. По умолчанию '!DEFAULT!'.|:|1920|"
     "H|video_height|Размер видео в пикселях по высоте. По умолчанию '!DEFAULT!'.|:|1080|"
     "p|ffmpeg_pre_options|Опции ffmpeg в самом начале. По умолчанию '!DEFAULT!'.|:|'-loop 1 -r 2'|"
@@ -39,7 +38,9 @@ video_params=(
     "r|page_range|Указывает страницы из выходного файла для обработки. Пример '{1..32}', '{2..10..2}', '\$(seq 5 3 30)'|:|''|"
     "m|minimum_text_on_page|Минимальное количество символов на странице при котором происходит разделение страницы на две. По умолчанию '!DEFAULT!'.|:|1000|"
     "M|minimum_time_on_page|Минимальное количество секунд на страницу. По умолчанию '!DEFAULT!'.|:|5|"
-#    "|||:||"
+    "T|timing_file|Файл хронометража.|:|''|"
+    "w|water_mark|Текст на видео (По настройкам overlay ffmpeg). По умолчанию '!DEFAULT!'.|:|\"drawtext=text='Сделано при помощи':box=1:boxcolor=black@0.5:boxborderw=5:y=text_h:x=w-text_w:fontcolor=white:fontsize=20:fontfile=/usr/share/fonts/truetype/freefont/FreeSerif.ttf, drawtext=text='BookToVideo. Мирокод.':box=1:boxcolor=black@0.5:boxborderw=5:y=text_h * 2.5:x=w-text_w:fontcolor=white:fontsize=20:fontfile=/usr/share/fonts/truetype/freefont/FreeSerif.ttf\"|"
+    "R|page_resolution|Разрешение картинки из входного файла. По умолчанию '!DEFAULT!'.|:|300|"
     )
 
 all_params=("${common_params[@]}" "${sound_params[@]}" "${video_params[@]}")
@@ -70,6 +71,16 @@ $(ProcessParams sound_params Params2Help)
 
 Параметры видео
 $(ProcessParams video_params Params2Help)
+
+Примеры:
+
+# Расширенный вывод
+pdf2video -i in.pdf -o out.mp4 -V
+# Первые 10 страниц
+pdf2video -i in.pdf -o out.mp4 -r {1..10}
+# Хронометраж
+pdf2video -i in.pdf -o out.mp4 -T timing.txt
+
 EOF
 }
 
@@ -112,6 +123,20 @@ function Text2mp3 {
     eval "$cmd"
 }
 
+function GetTimeFromSeconds {
+    local T=$1
+    local H=$(( T/60/60 ))
+    local M=$(( T/60%60 ))
+    local S=$(( T%60 ))
+    echo "$H:$M:$S"
+}
+
+function PlayTime {
+    local page_mp3_file=$1
+
+    echo $(mp3info -p "%S\n" "${page_mp3_file}")
+}
+
 function MakeVideo {
     local page_image_file=$1
     local page_mp3_file=$2
@@ -121,10 +146,12 @@ function MakeVideo {
     local resized_page_image_file=$(mktemp -t "MakeVideo_resized_page_image_XXXXXXXXXXX.png"
 )
 
-    ffmpeg -y -i "${page_image_file}" -vf "scale=${video_width}:${video_height}:force_original_aspect_ratio=decrease,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2" "${resized_page_image_file}"
+    local cmd="ffmpeg -y -i \"${page_image_file}\" -filter_complex \"[0]scale=${video_width}:${video_height}:force_original_aspect_ratio=decrease,pad=${video_width}:${video_height}:(ow-iw)/2:(oh-ih)/2[scale];[scale]split=2[bg][fg];[bg]drawbox=c=white@1:replace=1:t=fill[bg];[bg][fg]overlay=format=auto\" \"${resized_page_image_file}\""
+    [ $verbose ] && echo "cmd $cmd"
+    eval "$cmd"
     [ $verbose ] && echo "ffmpeg $?"
 
-    local play_time=$(mp3info -p "%S\n" "${page_mp3_file}")
+    local play_time=$(PlayTime "${page_mp3_file}")
     local time_opt="-c:a copy"
     if [ ${minimum_time_on_page} -ge $(( ${play_time} )) ]; then
         local add_time="$minimum_time_on_page" # $(( 5 - ${play_time} ))
@@ -135,11 +162,15 @@ function MakeVideo {
     float_image=''
     video_filter=''
     if [ $split = 'time' ]; then
+        cur_water_mark="; [out]${water_mark}[out]"
         float_image="-i \"${resized_page_image_file}\""
-        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2:${video_height}*2[scale1]; [0:v][scale1]overlay=enable='between=(t,0,${play_time})':x=-w/4:y=-t/(${play_time})*h/2[out]\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
+        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2:${video_height}*2[scale1]; [0:v][scale1]overlay=enable='between=(t,0,${play_time})':x=-w/4:y=-t/(${play_time})*h/2[out]${cur_water_mark}\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
     elif [ $split = 'half' ]; then
+        cur_water_mark="; [out]${water_mark}[out]"
         float_image="-i \"${resized_page_image_file}\""
-        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale1]; [1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale2]; [0:v][scale1]overlay=enable='between=(t,0,${play_time}/2)':x=-w/(4*1.026):y=0[out]; [out][scale2]overlay=enable='between=(t,${play_time}/2,${play_time})':x=-w/(4*1.026):y=-h/(2*1.026)[out]\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
+        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale1]; [1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale2]; [0:v][scale1]overlay=enable='between=(t,0,${play_time}/2)':x=-w/(4*1.026):y=0[out]; [out][scale2]overlay=enable='between=(t,${play_time}/2,${play_time})':x=-w/(4*1.026):y=-h/(2*1.026)[out]${cur_water_mark}\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
+    else
+        video_filter="-filter_complex \"${water_mark}\" -map \"1:a\""
     fi
 
     cmd="ffmpeg -y ${ffmpeg_pre_options} -i \"${resized_page_image_file}\" ${float_image} -i \"${page_mp3_file}\" ${video_filter} ${ffmpeg_options} ${time_opt} \"${page_mp4_file}\""
@@ -156,6 +187,8 @@ function MakeVideo {
 }
 
 [ $verbose ] && echo "Всего страниц $page_count"
+
+cur_timing=0
 
 for ((page=1;page<=${page_count};page++)); do
 
@@ -183,21 +216,25 @@ for ((page=1;page<=${page_count};page++)); do
     page_image_file=$(mktemp -t "pdf2video_page_image_file_${page}_XXXXXXXXXXX.png"
 )
     pdftotext -f $page -l $page "${input_file}" "$page_text_file"
-    convert -density 300 "${input_file}[$(( $page - 1))]" -quality 90 "$page_image_file"
+    convert -density "$page_resolution" "${input_file}[$(( $page - 1))]" -quality 98 "$page_image_file"
 
-    source_text="$(cat "${page_text_file}")"
+    source_text="${start_text} $(cat "${page_text_file}")"
+    start_text="" # Добавляем только один раз
 
     page_mp3_file=$(mktemp -t "pdf2video_page_mp3_file_XXXXXXXXXXX.mp3")
 
-    Text2mp3 "$page_text_file" "$page_mp3_file"
+    Text2mp3 "${page_text_file}" "${page_mp3_file}"
+
+    [ "${timing_file}" != '' ] && echo "$(GetTimeFromSeconds ${cur_timing}) ${source_text//[$'\t\r\n']/' '}" >> "${timing_file}"
+    cur_timing=$(( ${cur_timing} + $(PlayTime "${page_mp3_file}") ))
 
     page_mp4_file="${input_file}_${page}.mp4"
 
-    MakeVideo "$page_image_file" "$page_mp3_file" "$page_mp4_file" "$split"
+    MakeVideo "${page_image_file}" "${page_mp3_file}" "${page_mp4_file}" "${split}"
 
-    rm "$page_mp3_file"
-    rm "$page_image_file"
-    rm "$page_text_file"
+    rm "${page_mp3_file}"
+    rm "${page_image_file}"
+    rm "${page_text_file}"
 
 done
 
