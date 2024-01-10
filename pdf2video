@@ -211,19 +211,18 @@ for ((page=1;page<=${page_count};page++)); do
     [ $verbose ] && echo "------------------------------------------------"
     [ $verbose ] && echo "Обрабатываем страницу №$page"
 
-    page_text_file=$(mktemp -t "pdf2video_page_text_file_${page}_XXXXXXXXXXX.txt"
-)
     page_image_file=$(mktemp -t "pdf2video_page_image_file_${page}_XXXXXXXXXXX.png"
 )
-    pdftotext -f $page -l $page "${input_file}" "$page_text_file"
     convert -density "$page_resolution" "${input_file}[$(( $page - 1))]" -quality 98 "$page_image_file"
 
-    source_text="${start_text} $(cat "${page_text_file}")"
+    source_text="$(pdftotext -f $page -l $page "${input_file}" -)"
+
+    source_text="${start_text} $source_text"
     start_text="" # Добавляем только один раз
 
     page_mp3_file=$(mktemp -t "pdf2video_page_mp3_file_XXXXXXXXXXX.mp3")
 
-    Text2mp3 "${page_text_file}" "${page_mp3_file}"
+    Text2mp3 <( echo "$source_text" ) "${page_mp3_file}"
 
     [ "${timing_file}" != '' ] && echo "$(GetTimeFromSeconds ${cur_timing}) ${source_text//[$'\t\r\n']/' '}" >> "${timing_file}"
     cur_timing=$(( ${cur_timing} + $(PlayTime "${page_mp3_file}") ))
@@ -234,7 +233,6 @@ for ((page=1;page<=${page_count};page++)); do
 
     rm "${page_mp3_file}"
     rm "${page_image_file}"
-    rm "${page_text_file}"
 
 done
 
