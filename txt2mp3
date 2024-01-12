@@ -35,8 +35,7 @@ all_params=("${common_params[@]}" "${sound_params[@]}")
 function GetExec {
     local exec_file_name="$1"
 
-    exec="$exec_file_name"
-    [ ! -f "$exec" ] && exec="./$exec_file_name"
+    exec="./$exec_file_name"
     [ ! -f "$exec" ] && exec="~/$exec_file_name"
 
     echo "$exec"
@@ -82,13 +81,13 @@ fi
 source_text=$(cat "${input_file}")
 
 # Удаляем все пробелы в начале и в конце строк и заменяем два и более пробелов на один, удаляем все непечатаемые символы
-source_text="$(echo "${source_text//[$'\t\r\n']/' '}" | sed 's/^ *//;s/[ ^]*$//;s/  */ /;s/[^[:blank:][:print:]]//g')"
+source_text="$(echo "${source_text//[$'\t\r\n']/' '}" | sed 's/^ *//;s/[ ^]*$//;s/  */ /;s/__*/_/;s/[^[:blank:][:print:]]//g')"
 
 #[ $verbose ] && echo "Исходный текст $source_text" >> "out.txt"
 
 ping -c 3 ya.ru &>/dev/null || { echo "Интернет недоступен."; exit; }
 
-split_size=1450
+split_size=1400
 [ $verbose ] && echo "Длина текста ${#source_text}: Разбиваем на части по $split_size"
 
 txt_array=()
@@ -116,7 +115,7 @@ done
 audio_file_names_array=()
 
 # Если текст пустой, то всё равно создаём выходной файл
-[ ${#txt_array[@]} -le 0 ] && { txt_array+="."; }
+[ ${#txt_array[@]} -le 0 ] && { txt_array+="-."; }
 
 SAVE_IFS=$IFS
 IFS=""

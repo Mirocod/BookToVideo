@@ -1,0 +1,31 @@
+#!/bin/bash
+# Общественное достояние, 2024, Алексей Безбородов (Alexei Bezborodov) <AlexeiBv+mirocod_pdf2video@narod.ru> 
+
+in_file_name='test/Наставление А.В.Суворова.pdf'
+out_file_name_prefix='test/test_out/Наставление А.В.Суворова'
+start_text='Файл для теста.'
+
+mkdir 'test_out'
+
+cd ..
+
+function MakeVideoWithSplit {
+    local split=$1
+    local speaker=$2
+    ./pdf2video -i "${in_file_name}" -t "${split}" -o "${out_file_name_prefix}_${speaker}_${split}.mp4" --timing_file "${out_file_name_prefix}_${speaker}_${split}.txt" -s "${speaker}" -V
+} 
+
+MakeVideoWithSplit 'time' 'erkanyavas'
+MakeVideoWithSplit 'half' 'zahar'
+MakeVideoWithSplit 'full' 'oksana'
+
+./pdf2video -i "${in_file_name}" -r '{1..1}' -o "${out_file_name_prefix}_{1..1}.mp4" -V
+
+./pdf2video -i "${in_file_name}" -a '${start_text}' -o "${out_file_name_prefix}_start_text.mp4" -V
+
+./pdf2video -i "${in_file_name}" -W '640' -H '480' -o "${out_file_name_prefix}_640*480.mp4" -V
+
+./pdf2video -i "${in_file_name}" --speaker -split 'time' 'oksana' -o "${out_file_name_prefix}_oksana.mp4" -V
+
+./pdf2video -i "${in_file_name}" -speaker 'oksana' -e 'good' -o "${out_file_name_prefix}_oksana_good.mp4" -V
+

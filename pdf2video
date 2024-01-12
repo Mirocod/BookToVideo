@@ -17,7 +17,7 @@ common_params=(
     )
 
 sound_params=(
-    "i|input|Входной текстовый файл.|:||"
+    "i|input|Входной файл.|:||"
     "e|emotion|Эмоциональный настрой говорящего. Может принимать значения 'neutral', 'good', 'evil'. По умолчанию '!DEFAULT!'.|:|'neutral'|"
     "s|speaker|Голос говорящего. Может принимать значения 'oksana','jane','omazh','zahar','ermil','silaerkan','erkanyavas','alyss', 'nick'. По умолчанию '!DEFAULT!'.|:|'erkanyavas'|"
     "S|speed|Скорость озвучки. По умолчанию '!DEFAULT!'.|:|'1.0'|"
@@ -49,8 +49,7 @@ all_params=("${common_params[@]}" "${sound_params[@]}" "${video_params[@]}")
 function GetExec {
     local exec_file_name="$1"
 
-    exec="$exec_file_name"
-    [ ! -f "$exec" ] && exec="./$exec_file_name"
+    exec="./$exec_file_name"
     [ ! -f "$exec" ] && exec="~/$exec_file_name"
 
     echo "$exec"
@@ -77,7 +76,7 @@ $(ProcessParams video_params Params2Help)
 # Расширенный вывод
 pdf2video -i in.pdf -o out.mp4 -V
 # Первые 10 страниц
-pdf2video -i in.pdf -o out.mp4 -r {1..10}
+pdf2video -i in.pdf -o out.mp4 -r '{1..10}'
 # Хронометраж
 pdf2video -i in.pdf -o out.mp4 -T timing.txt
 
@@ -152,6 +151,7 @@ function MakeVideo {
     [ $verbose ] && echo "ffmpeg $?"
 
     local play_time=$(PlayTime "${page_mp3_file}")
+    play_time_plus1=$(( $play_time + 1 ))
     local time_opt="-c:a copy"
     if [ ${minimum_time_on_page} -ge $(( ${play_time} )) ]; then
         local add_time="$minimum_time_on_page" # $(( 5 - ${play_time} ))
@@ -164,11 +164,11 @@ function MakeVideo {
     if [ $split = 'time' ]; then
         cur_water_mark="; [out]${water_mark}[out]"
         float_image="-i \"${resized_page_image_file}\""
-        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2:${video_height}*2[scale1]; [0:v][scale1]overlay=enable='between=(t,0,${play_time})':x=-w/4:y=-t/(${play_time})*h/2[out]${cur_water_mark}\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
+        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2:${video_height}*2[scale1]; [0:v][scale1]overlay=enable='between=(t,0,${play_time})':x=-w/4:y=-t/(${play_time})*h/2[out]${cur_water_mark}\" -map \"[out]\" -map \"2:a\" -t '${play_time_plus1}'"
     elif [ $split = 'half' ]; then
         cur_water_mark="; [out]${water_mark}[out]"
         float_image="-i \"${resized_page_image_file}\""
-        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale1]; [1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale2]; [0:v][scale1]overlay=enable='between=(t,0,${play_time}/2)':x=-w/(4*1.026):y=0[out]; [out][scale2]overlay=enable='between=(t,${play_time}/2,${play_time})':x=-w/(4*1.026):y=-h/(2*1.026)[out]${cur_water_mark}\" -map \"[out]\" -map \"2:a\" -t '${play_time}'"
+        video_filter="-filter_complex  \"[1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale1]; [1:v]scale=${video_width}*2 - ${video_width}/20:${video_height}*2 - ${video_height}/20[scale2]; [0:v][scale1]overlay=enable='between=(t,0,${play_time}/2)':x=-w/(4*1.026):y=0[out]; [out][scale2]overlay=enable='between=(t,${play_time}/2,${play_time})':x=-w/(4*1.026):y=-h/(2*1.026)[out]${cur_water_mark}\" -map \"[out]\" -map \"2:a\" -t '${play_time_plus1}'"
     else
         video_filter="-filter_complex \"${water_mark}\" -map \"1:a\""
     fi
