@@ -1,0 +1,74 @@
+#!/bin/bash
+# Общественное достояние, 2024, Алексей Безбородов (Alexei Bezborodov) <AlexeiBv+mirocod_pdf2video@narod.ru> 
+
+dir_out='speakers_out'
+
+mkdir "$dir_out"
+
+in_file_name="test/Наставление А.В.Суворова.txt"
+out_file_name_prefix="test/$dir_out/Наставление А.В.Суворова"
+
+cd ..
+
+function MakeMp3WithSpeakers {
+    local speaker=$1
+    local emotion=$2
+    ./txt2mp3 -i "${in_file_name}" -e "${emotion}" -o "${out_file_name_prefix}_${speaker}_${emotion}.mp3" -s "${speaker}" -V
+} 
+
+declare -a arr_speaker=(
+    'oksana'
+    'jane'
+    'omazh'
+    'zahar'
+    'ermil'
+    'silaerkan'
+    'erkanyavas'
+    'alyss'
+    'nick'
+    'lea'
+    'john'
+    'naomi'
+    'amira'
+    'madi'
+    'alena'
+    'filipp'
+    'madirus'
+    'dasha'
+    'sasha'
+    'julia'
+    'lera'
+    'masha'
+    'marina'
+    'alexander'
+    'alex'
+    'alexey'
+    'alexei'
+    'kirill'
+    'anton'
+    'nigora'
+    'tema'
+    'tomoru'
+    'pasha'
+    'misha'
+    )
+
+declare -a arr_emotion=(
+    'neutral'
+    'good'
+    'evil'
+    'strict'
+    'whisper'
+    'friendly'
+    'classic'
+    'modern'
+    )
+
+for s in "${arr_speaker[@]}"
+do
+    for e in "${arr_emotion[@]}"
+    do
+        MakeMp3WithSpeakers "$s" "$e"
+    done
+done
+
