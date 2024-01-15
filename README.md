@@ -10,27 +10,27 @@
 # Пример работы программы
 
 * Смещение картинки по времени
-<iframe src="https://vk.com/video_ext.php?oid=-210998646&id=456239143" width="426" height="240" allow="autoplay; encrypted-media; fullscreen; picture-in-picture;" frameborder="0" allowfullscreen></iframe>
+https://vk.com/video-210998646_456239143
 
 * Страница на весь экран
-<iframe src="https://vk.com/video_ext.php?oid=-210998646&id=456239144" width="426" height="240" allow="autoplay; encrypted-media; fullscreen; picture-in-picture;" frameborder="0" allowfullscreen></iframe>
+https://vk.com/video-210998646_456239144
 
 * Деление страницы пополам
-<iframe src="https://vk.com/video_ext.php?oid=-210998646&id=456239145" width="426" height="240" allow="autoplay; encrypted-media; fullscreen; picture-in-picture;" frameborder="0" allowfullscreen></iframe>
+https://vk.com/video-210998646_456239145
 
 # Примеры команд
 
 * Озвучивание
-    txt2mp3 -i in.txt -o out.mp3
+> txt2mp3 -i in.txt -o out.mp3
 
 * Преобразование в видео
-    pdf2video -i in.pdf -o out.mp4
+> pdf2video -i in.pdf -o out.mp4
 
 * Преобразование в видео cо смещением картинки по времени
-    pdf2video -i in.pdf -o out.mp4 --split 'time'
+> pdf2video -i in.pdf -o out.mp4 --split 'time'
 
 * Помощь
-    txt2mp3 -h
-    pdf2video -h
+> txt2mp3 -h
+> pdf2video -h
 
 * В папке test есть два теста.
